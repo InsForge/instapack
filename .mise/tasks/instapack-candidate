@@ -16,9 +16,7 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
   -ldflags="-s -w -X main.version=${version}" -o "$work/railpack" ./cmd/cli
 docker buildx build --platform linux/amd64 --load \
   -f images/alpine/frontend/goreleaser.Dockerfile -t "$frontend" "$work"
-docker run --rm --platform linux/amd64 --entrypoint /railpack \
-  -e GITHUB_TOKEN -v "$PWD:$PWD" -w "$PWD" "$frontend" \
-  plan examples/python-fastapi --out "$work/railpack-plan.json"
+"$work/railpack" prepare examples/python-fastapi --plan-out "$work/railpack-plan.json"
 docker buildx build --platform linux/amd64 --load \
   --build-arg "BUILDKIT_SYNTAX=$frontend" \
   --build-arg "github-token=${GITHUB_TOKEN:-}" \
