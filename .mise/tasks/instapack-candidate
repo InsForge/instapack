@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+revision=$(git rev-parse HEAD)
+version="instapack-${revision}"
+mkdir -p tmp
+work=$(mktemp -d "$PWD/tmp/instapack-build.XXXXXX")
+output="$PWD/tmp/instapack-candidate"
+frontend="instapack-frontend:${revision}"
+image="instapack-smoke:${revision}"
+container=""
+trap 'if [[ -n "$container" ]]; then docker rm -f "$container" >/dev/null; fi' EXIT
+mkdir -p "$output"
+
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
+  -ldflags="-s -w -X main.version=${version}" -o "$work/railpack" ./cmd/cli
+docker buildx build --platform linux/amd64 --load \
+  -f images/alpine/frontend/goreleaser.Dockerfile -t "$frontend" "$work"
+docker run --rm --platform linux/amd64 --entrypoint /railpack \
+  -e GITHUB_TOKEN -v "$PWD:$PWD" -w "$PWD" "$frontend" \
+  plan examples/python-fastapi --out "$work/railpack-plan.json"
+docker buildx build --platform linux/amd64 --load \
+  --build-arg "BUILDKIT_SYNTAX=$frontend" \
+  --build-arg "github-token=${GITHUB_TOKEN:-}" \
+  -f "$work/railpack-plan.json" -t "$image" examples/python-fastapi
+container=$(docker run -d --platform linux/amd64 -e PORT=8000 -p 127.0.0.1::8000 "$image")
+address=$(docker port "$container" 8000/tcp)
+healthy=false
+for _ in {1..30}; do
+  if curl --fail --silent --max-time 2 "http://$address/" > "$work/response.json"; then
+    if grep -q 'Welcome to FastAPI' "$work/response.json"; then
+      healthy=true
+      break
+    fi
+  fi
+  sleep 2
+done
+if [[ "$healthy" != true ]]; then
+  docker logs "$container"
+  exit 1
+fi
+
+tar -czf "$output/instapack-linux-amd64.tar.gz" -C "$work" railpack
+docker save "$frontend" | gzip > "$output/instapack-frontend-linux-amd64.tar.gz"
+cp instapack-upstream.json "$output/"
+printf '%s\n' "$revision" > "$output/commit.txt"
+printf '%s\n' "$version" > "$output/version.txt"
+cd "$output"
+shasum -a 256 ./*.tar.gz > checksums.txt
