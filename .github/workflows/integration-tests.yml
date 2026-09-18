@@ -21,6 +21,7 @@ env:
 jobs:
   # generate a JSON array of all entries in examples/ to shard out example into a separate job that can be run in parallel
   find-examples:
+    if: github.repository == 'railwayapp/railpack'
     runs-on: ubuntu-latest
     outputs:
       examples: ${{ steps.find-examples.outputs.examples }}
@@ -40,6 +41,7 @@ jobs:
   # since railpack uses a image tag from the mise version compiled into the binary, pushes to the registry should not cause
   # any production impacts.
   build-images:
+    if: github.repository == 'railwayapp/railpack'
     runs-on: ubuntu-latest
     permissions:
       packages: write

@@ -21,6 +21,7 @@ env:
 
 jobs:
   test:
+    if: github.event_name != 'schedule' || github.repository == 'railwayapp/railpack'
     name: Check and Test
     runs-on: ubuntu-latest
     steps:

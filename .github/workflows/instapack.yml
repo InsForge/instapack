@@ -1,0 +1,51 @@
+name: Instapack
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: instapack-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  MISE_ENV: ci
+
+jobs:
+  candidate:
+    name: Build and run candidate
+    if: github.repository == 'InsForge/instapack'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151
+      - uses: docker/setup-docker-action@77e84dbf09b47d1e29270283c22f16145aa85ca1
+        with:
+          version: ${{ env.DOCKER_VERSION }}
+      - name: Start BuildKit
+        run: mise run run-buildkit-container
+      - name: Build and run Node, Python and Go examples
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: mise run test-integration -- -run '^TestExamplesIntegration/(node-npm|python-fastapi|go-mod)$' -timeout 20m
+      - name: Package and test matching CLI and frontend
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: mise run instapack-candidate
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: instapack-linux-amd64-${{ github.sha }}
+          path: tmp/instapack-candidate/*
+          if-no-files-found: error
+          retention-days: 7
+      - name: Stop BuildKit
+        if: always()
+        run: docker stop buildkit
