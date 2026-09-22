@@ -61,7 +61,7 @@ func NewExecCommand(cmd string, options ...ExecOptions) Command {
 }
 
 func ShellCommandString(cmd string) string {
-	return "sh -c '" + cmd + "'"
+	return "sh -c '" + strings.ReplaceAll(cmd, "'", "'\\''") + "'"
 }
 
 func NewExecShellCommand(cmd string, options ...ExecOptions) Command {

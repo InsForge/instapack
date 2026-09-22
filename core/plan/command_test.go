@@ -1,9 +1,11 @@
 package plan
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
+	"github.com/moby/buildkit/client/llb"
 	"github.com/stretchr/testify/require"
 )
 
@@ -86,6 +88,25 @@ func TestCommandMarshalUnmarshal(t *testing.T) {
 				require.Equal(t, string(roundTrip), tt.expectedJSON, "string unmarshal to JSON result")
 
 			}
+		})
+	}
+}
+
+func TestShellCommandPreservesBuildKitArguments(t *testing.T) {
+	for _, command := range []string{
+		"echo hello",
+		`printf '%s\n' "it's quoted" > message.txt`,
+		`node -e 'require("fs").writeFileSync("message.txt", "hello")'`,
+		"printf '%s' \"$HOME\" && echo `printf nested`\nprintf done",
+		"",
+	} {
+		t.Run(command, func(t *testing.T) {
+			generated := NewExecShellCommand(command).(ExecCommand)
+			info := llb.ExecInfo{State: llb.Scratch()}
+			llb.Shlex(generated.Cmd).SetRunOption(&info)
+			args, err := info.State.GetArgs(context.Background())
+			require.NoError(t, err)
+			require.Equal(t, []string{"sh", "-c", command}, args)
 		})
 	}
 }
