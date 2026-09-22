@@ -10,5 +10,12 @@
     "envs": {
       "RAILPACK_PRUNE_DEPS": "true"
     }
+  },
+  {
+    "expectedOutput": "it's quoted",
+    "envs": {
+      "RAILPACK_BUILD_CMD": "printf '%s\\n' \"it's quoted\" > quoted-message.txt",
+      "RAILPACK_START_CMD": "cat quoted-message.txt"
+    }
   }
 ]
