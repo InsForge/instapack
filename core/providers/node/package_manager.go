@@ -365,7 +365,17 @@ func (p PackageManager) SupportingInstallFiles(ctx *generate.GenerateContext) []
 		}
 	}
 
-	return allFiles
+	dockerignore, err := plan.NewDockerignoreContext(ctx.App)
+	if err != nil {
+		log.Warnf("Could not read install context exclusions: %v", err)
+		return allFiles
+	}
+	filtered, err := ctx.App.FilterPaths(allFiles, dockerignore.Excludes)
+	if err != nil {
+		log.Warnf("Could not filter install context paths: %v", err)
+		return allFiles
+	}
+	return filtered
 }
 
 // GetPackageManagerPackages installs specific versions of package managers by analyzing the users code
