@@ -365,7 +365,12 @@ func (p PackageManager) SupportingInstallFiles(ctx *generate.GenerateContext) []
 		}
 	}
 
-	return allFiles
+	filtered, err := ctx.App.FilterPaths(allFiles, ctx.GetExcludePatterns())
+	if err != nil {
+		log.Warnf("Could not filter install context paths: %v", err)
+		return allFiles
+	}
+	return filtered
 }
 
 // GetPackageManagerPackages installs specific versions of package managers by analyzing the users code

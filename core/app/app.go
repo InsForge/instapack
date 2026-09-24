@@ -1,9 +1,11 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -11,7 +13,9 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/bmatcuk/doublestar/v4"
+	"github.com/moby/patternmatcher"
 	"github.com/railwayapp/railpack/internal/utils"
+	"github.com/tonistiigi/fsutil"
 	"gopkg.in/yaml.v2"
 )
 
@@ -83,6 +87,52 @@ func (a *App) FindFiles(pattern string) ([]string, error) {
 // FindDirectories returns a list of directory paths matching a glob pattern
 func (a *App) FindDirectories(pattern string) ([]string, error) {
 	return a.findMatches(pattern, true)
+}
+
+func (a *App) FilterPaths(paths, excludes []string) ([]string, error) {
+	if len(paths) == 0 || len(excludes) == 0 {
+		return paths, nil
+	}
+	matcher, err := patternmatcher.New(excludes)
+	if err != nil {
+		return nil, err
+	}
+	source, err := fsutil.NewFS(a.Source)
+	if err != nil {
+		return nil, err
+	}
+	filtered, err := fsutil.NewFilterFS(source, &fsutil.FilterOpt{ExcludePatterns: excludes})
+	if err != nil {
+		return nil, err
+	}
+	present := make(map[string]bool, len(paths))
+	for _, path := range paths {
+		excluded, err := matcher.MatchesOrParentMatches(path)
+		if err != nil {
+			return nil, err
+		}
+		present[path] = !excluded
+	}
+	err = filtered.Walk(context.Background(), ".", func(path string, _ fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		path = filepath.ToSlash(path)
+		if _, wanted := present[path]; wanted {
+			present[path] = true
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	var result []string
+	for _, path := range paths {
+		if present[path] {
+			result = append(result, path)
+		}
+	}
+	return result, nil
 }
 
 // findGlob finds paths matching a glob pattern, with caching

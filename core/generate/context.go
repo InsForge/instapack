@@ -142,6 +142,10 @@ func (c *GenerateContext) ResolvePackages() (map[string]*resolver.ResolvedPackag
 	return c.Resolver.ResolvePackages()
 }
 
+func (c *GenerateContext) GetExcludePatterns() []string {
+	return append(slices.Clone(c.dockerignoreCtx.Excludes), c.Config.Exclude...)
+}
+
 // Generate a build plan from the context
 func (c *GenerateContext) Generate() (*plan.BuildPlan, map[string]*resolver.ResolvedPackage, error) {
 	c.applyConfig()
@@ -154,10 +158,7 @@ func (c *GenerateContext) Generate() (*plan.BuildPlan, map[string]*resolver.Reso
 
 	buildPlan := plan.NewBuildPlan()
 
-	// Merge exclude patterns from .dockerignore and railpack.json
-	excludePatterns := []string{}
-	excludePatterns = append(excludePatterns, c.dockerignoreCtx.Excludes...)
-	excludePatterns = append(excludePatterns, c.Config.Exclude...)
+	excludePatterns := c.GetExcludePatterns()
 	if len(excludePatterns) > 0 {
 		buildPlan.Exclude = excludePatterns
 	}
