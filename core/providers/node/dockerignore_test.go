@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/railwayapp/railpack/core/app"
+	"github.com/railwayapp/railpack/core/config"
 	"github.com/railwayapp/railpack/core/generate"
 	"github.com/railwayapp/railpack/core/logger"
 	"github.com/railwayapp/railpack/core/plan"
@@ -14,16 +15,20 @@ import (
 
 func TestInstallDockerignoreContext(t *testing.T) {
 	for _, tt := range []struct {
-		name   string
-		ignore string
-		want   []string
+		name    string
+		ignore  string
+		exclude []string
+		want    []string
 	}{
-		{"symlinked_manifest", "/prisma\n", []string{"package.json", "tools/demo/package.json", "tools/keep/package.json", "linked/package.json", "config/private.txt"}},
-		{"wildcard_reincluded_child", "/prisma\n!**/schema.prisma\n", []string{"package.json", "tools/demo/package.json", "tools/keep/package.json", "prisma", "config/private.txt"}},
-		{"reincluded_child", "/prisma\n!/prisma/schema.prisma\n", []string{"package.json", "tools/demo/package.json", "tools/keep/package.json", "prisma", "config/private.txt"}},
-		{"unfiltered", "", []string{"package.json", "tools/demo/package.json", "tools/keep/package.json", "prisma", "config/private.txt"}},
-		{"excluded", "/tools/demo\n/prisma\n/config/private.txt\n", []string{"package.json", "tools/keep/package.json"}},
-		{"reincluded", "/tools/*\n!/tools/keep\n/prisma\n/config/private.txt\n", []string{"package.json", "tools/keep/package.json"}},
+		{"config_only", "", []string{"prisma"}, []string{"package.json", "tools/demo/package.json", "tools/keep/package.json", "config/private.txt"}},
+		{"config_reincludes_file", "/tools/demo\n", []string{"!tools/demo/package.json"}, []string{"package.json", "tools/demo/package.json", "tools/keep/package.json", "prisma", "config/private.txt"}},
+		{"config_excludes_reincluded", "/prisma\n!/prisma/schema.prisma\n", []string{"prisma/schema.prisma"}, []string{"package.json", "tools/demo/package.json", "tools/keep/package.json", "config/private.txt"}},
+		{"symlinked_manifest", "/prisma\n", nil, []string{"package.json", "tools/demo/package.json", "tools/keep/package.json", "linked/package.json", "config/private.txt"}},
+		{"wildcard_reincluded_child", "/prisma\n!**/schema.prisma\n", nil, []string{"package.json", "tools/demo/package.json", "tools/keep/package.json", "prisma", "config/private.txt"}},
+		{"reincluded_child", "/prisma\n!/prisma/schema.prisma\n", nil, []string{"package.json", "tools/demo/package.json", "tools/keep/package.json", "prisma", "config/private.txt"}},
+		{"unfiltered", "", nil, []string{"package.json", "tools/demo/package.json", "tools/keep/package.json", "prisma", "config/private.txt"}},
+		{"excluded", "/tools/demo\n/prisma\n/config/private.txt\n", nil, []string{"package.json", "tools/keep/package.json"}},
+		{"reincluded", "/tools/*\n!/tools/keep\n/prisma\n/config/private.txt\n", nil, []string{"package.json", "tools/keep/package.json"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			directory := t.TempDir()
@@ -40,12 +45,10 @@ func TestInstallDockerignoreContext(t *testing.T) {
 			}
 			userApp, err := app.NewApp(directory)
 			require.NoError(t, err)
-			ctx := &generate.GenerateContext{
-				App:    userApp,
-				Env:    app.NewEnvironment(nil),
-				Logger: logger.NewLogger(),
-				Caches: generate.NewCacheContext(),
-			}
+			cfg := config.EmptyConfig()
+			cfg.Exclude = tt.exclude
+			ctx, err := generate.NewGenerateContext(userApp, app.NewEnvironment(nil), cfg, logger.NewLogger())
+			require.NoError(t, err)
 			ctx.Env.Variables["RAILPACK_NODE_INSTALL_PATTERNS"] = "config/*.txt"
 			workspace, err := NewWorkspace(ctx.App)
 			require.NoError(t, err)
