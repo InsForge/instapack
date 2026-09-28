@@ -8,6 +8,7 @@ import (
 
 	_ "embed"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/railwayapp/railpack/core/generate"
 	"github.com/railwayapp/railpack/core/plan"
 	"github.com/railwayapp/railpack/core/providers/node"
@@ -418,6 +419,9 @@ func (p *PhpProvider) phpImagePackage(ctx *generate.GenerateContext) (*generate.
 		phpVersion := objx.New(composerJson).Get("require.php")
 		if phpVersion.IsStr() {
 			if after, ok := strings.CutPrefix(phpVersion.Str(), "^"); ok {
+				if version, err := semver.StrictNewVersion(after); err == nil && version.Major() > 0 && version.Patch() == 0 && version.Prerelease() == "" && version.Metadata() == "" {
+					after = fmt.Sprintf("%d.%d", version.Major(), version.Minor())
+				}
 				imageStep.Version(php, after, "composer.json > require > php")
 			} else {
 				imageStep.Version(php, phpVersion.Str(), "composer.json > require > php")
